@@ -62,6 +62,7 @@ def upgrade() -> None:
         "tts", "avatar", "video_gen", "subtitles", name="capability"
     )
     capability_enum.create(op.get_bind(), checkfirst=True)
+    capability_enum.create_type = False
     op.create_table(
         "provider_config",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -75,6 +76,7 @@ def upgrade() -> None:
         "en", "hi", "hinglish", "mixed", name="languagemode"
     )
     language_mode_enum.create(op.get_bind(), checkfirst=True)
+    language_mode_enum.create_type = False
     op.create_table(
         "script",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -116,6 +118,7 @@ def upgrade() -> None:
         "pending", "running", "completed", "failed", "cancelled", name="jobstatus"
     )
     job_status_enum.create(op.get_bind(), checkfirst=True)
+    job_status_enum.create_type = False
     op.create_table(
         "video_job",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -134,6 +137,7 @@ def upgrade() -> None:
         "pending", "running", "completed", "failed", "skipped", name="stagestatus"
     )
     stage_status_enum.create(op.get_bind(), checkfirst=True)
+    stage_status_enum.create_type = False
     op.create_table(
         "video_job_stage_log",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -152,6 +156,7 @@ def upgrade() -> None:
         "audio", "avatar_clip", "background_clip", "subtitle_file", "final_video", name="assettype"
     )
     asset_type_enum.create(op.get_bind(), checkfirst=True)
+    asset_type_enum.create_type = False
     op.create_table(
         "media_asset",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
