@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: ai-char-pipeline-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile.render
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: media
+      mountPath: /data/media
+      sizeGB: 1
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: ENCRYPTION_MASTER_KEY
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: STORAGE_BACKEND
+        value: local
+      - key: STORAGE_LOCAL_PATH
+        value: /data/media
+      - key: CORS_ORIGINS
+        sync: false
