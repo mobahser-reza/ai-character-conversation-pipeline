@@ -8,10 +8,6 @@ services:
     dockerContext: ./backend
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: media
-      mountPath: /data/media
-      sizeGB: 1
     envVars:
       - key: ENVIRONMENT
         value: production
