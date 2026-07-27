@@ -8,16 +8,18 @@ from app.infrastructure.providers.api_key_lookup import get_decrypted_key
 from app.infrastructure.providers.storage.factory import get_storage_provider
 from app.infrastructure.providers.storage.paths import new_tmp_path
 
-_BASE_URL = "https://api.runwayml.com/v1"
+_BASE_URL = "https://api.dev.runwayml.com/v1"
+_API_VERSION = "2024-11-06"
 _POLL_INTERVAL_SECONDS = 5
 _POLL_TIMEOUT_SECONDS = 600
 
-_ASPECT_TO_RATIO = {"9:16": "768:1344", "1:1": "1024:1024", "16:9": "1344:768"}
+# veo3 only accepts these four ratios (no square option) and a fixed 8s duration.
+_ASPECT_TO_RATIO = {"9:16": "720:1280", "1:1": "720:1280", "16:9": "1280:720"}
 
 
 class RunwayVideoGenProvider(VideoGenProvider):
-    """Real Runway adapter (Gen-3/4 text-to-video). Verify endpoint/model names against
-    current Runway API docs before relying on this in production."""
+    """Real Runway adapter using the veo3 model via the public v1 API
+    (api.dev.runwayml.com, not api.runwayml.com - that hostname 401s)."""
 
     name = "runway"
 
@@ -25,7 +27,11 @@ class RunwayVideoGenProvider(VideoGenProvider):
         self, prompt: str, camera_notes: str, duration_seconds: float, aspect_ratio: str
     ) -> BackgroundResult:
         api_key = await get_decrypted_key("runway")
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "X-Runway-Version": _API_VERSION,
+        }
         full_prompt = f"{prompt}. Camera: {camera_notes}" if camera_notes else prompt
 
         async with httpx.AsyncClient(timeout=60) as client:
@@ -34,8 +40,9 @@ class RunwayVideoGenProvider(VideoGenProvider):
                 headers=headers,
                 json={
                     "promptText": full_prompt,
-                    "ratio": _ASPECT_TO_RATIO.get(aspect_ratio, "768:1344"),
-                    "duration": min(10, max(4, round(duration_seconds))),
+                    "ratio": _ASPECT_TO_RATIO.get(aspect_ratio, "720:1280"),
+                    "duration": 8,
+                    "model": "veo3",
                 },
             )
             submit_response.raise_for_status()
