@@ -24,7 +24,7 @@ async def upsert_api_key(payload: ApiKeyCreate, db: AsyncSession = Depends(get_d
         select(ApiKey).where(ApiKey.provider_name == payload.provider_name)
     )
     existing = result.scalar_one_or_none()
-    encrypted = encrypt_secret(payload.api_key)
+    encrypted = encrypt_secret(payload.api_key.strip())
     if existing:
         existing.key_encrypted = encrypted
         existing.is_active = True
