@@ -1,6 +1,7 @@
 import subprocess
 
 _ASPECT_TO_SIZE = {"9:16": "720x1280", "1:1": "1080x1080", "16:9": "1280x720"}
+_ENCODE_ARGS = ["-preset", "ultrafast", "-threads", "1"]
 
 
 def overlay_avatar_on_background(background_path: str, avatar_path: str, output_path: str) -> None:
@@ -16,18 +17,19 @@ def overlay_avatar_on_background(background_path: str, avatar_path: str, output_
             "-i", avatar_path,
             "-filter_complex", filter_complex,
             "-map", "[v]", "-map", "1:a?",
-            "-c:v", "libx264", "-c:a", "aac",
+            "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac",
             output_path,
         ],
         check=True,
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
 
 def concat_clips(clip_paths: list[str], output_path: str) -> None:
     if len(clip_paths) == 1:
         subprocess.run(["ffmpeg", "-y", "-i", clip_paths[0], "-c", "copy", output_path],
-                        check=True, capture_output=True)
+                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         return
 
     list_file = output_path + ".txt"
@@ -37,7 +39,8 @@ def concat_clips(clip_paths: list[str], output_path: str) -> None:
     subprocess.run(
         ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", output_path],
         check=True,
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
 
@@ -48,11 +51,12 @@ def burn_subtitles(video_path: str, srt_path: str, output_path: str) -> None:
             "ffmpeg", "-y",
             "-i", video_path,
             "-vf", f"subtitles={escaped_srt}:force_style='FontSize=18,Outline=2'",
-            "-c:a", "copy",
+            "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "copy",
             output_path,
         ],
         check=True,
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
 
@@ -63,9 +67,10 @@ def export_final(video_path: str, output_path: str, aspect_ratio: str) -> None:
             "ffmpeg", "-y",
             "-i", video_path,
             "-vf", f"scale={size}:force_original_aspect_ratio=decrease,pad={size}:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart",
+            "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac", "-movflags", "+faststart",
             output_path,
         ],
         check=True,
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
