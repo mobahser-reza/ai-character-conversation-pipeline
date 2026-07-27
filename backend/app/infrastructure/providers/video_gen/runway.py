@@ -45,7 +45,10 @@ class RunwayVideoGenProvider(VideoGenProvider):
                     "model": "veo3",
                 },
             )
-            submit_response.raise_for_status()
+            if submit_response.status_code >= 400:
+                raise RuntimeError(
+                    f"Runway submit failed ({submit_response.status_code}): {submit_response.text}"
+                )
             task_id = submit_response.json()["id"]
 
             elapsed = 0
