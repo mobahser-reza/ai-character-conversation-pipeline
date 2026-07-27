@@ -60,11 +60,14 @@ def burn_subtitles(video_path: str, srt_path: str, output_path: str) -> None:
 
 def export_final(video_path: str, output_path: str, aspect_ratio: str) -> None:
     size = _ASPECT_TO_SIZE.get(aspect_ratio, "720x1280")
+    width, height = size.split("x")
     _run_ffmpeg(
         [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-vf", f"scale={size}:force_original_aspect_ratio=decrease,pad={size}:(ow-iw)/2:(oh-ih)/2",
+            "-vf",
+            f"scale={size}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
             "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac", "-movflags", "+faststart",
             output_path,
         ]
