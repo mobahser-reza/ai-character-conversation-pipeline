@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
-type Script = { id: string; title: string; language_mode: string; created_at: string };
+type Script = { id: string; title: string; raw_text: string; language_mode: string; created_at: string };
 type ParsedPreview = {
   scenes: { order: number; description: string; camera_notes: string }[];
   lines: { speaker_name: string | null; text: string; detected_language: string; expression_tag: string | null }[];
@@ -23,6 +23,7 @@ export default function ScriptsPage() {
   const [title, setTitle] = useState("");
   const [rawText, setRawText] = useState(SAMPLE_SCRIPT);
   const [preview, setPreview] = useState<ParsedPreview | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function refresh() {
     apiFetch("/api/scripts").then(setScripts).catch(() => {});
@@ -105,11 +106,26 @@ export default function ScriptsPage() {
         <h2 className="mb-2 font-medium">Saved scripts</h2>
         <div className="space-y-2">
           {scripts.map((s) => (
-            <div key={s.id} className="flex items-center justify-between rounded border border-slate-800 px-4 py-2">
-              <span>{s.title}</span>
-              <Link href={`/scripts/${s.id}/generate`} className="text-sm text-indigo-400 hover:underline">
-                Generate video →
-              </Link>
+            <div key={s.id} className="rounded border border-slate-800 px-4 py-2">
+              <div className="flex items-center justify-between">
+                <span>{s.title}</span>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                    className="text-sm text-slate-400 hover:underline"
+                  >
+                    {expandedId === s.id ? "Hide" : "View"}
+                  </button>
+                  <Link href={`/scripts/${s.id}/generate`} className="text-sm text-indigo-400 hover:underline">
+                    Generate video →
+                  </Link>
+                </div>
+              </div>
+              {expandedId === s.id && (
+                <pre className="mt-2 whitespace-pre-wrap rounded bg-slate-900 border border-slate-700 p-3 font-mono text-sm">
+                  {s.raw_text}
+                </pre>
+              )}
             </div>
           ))}
         </div>
