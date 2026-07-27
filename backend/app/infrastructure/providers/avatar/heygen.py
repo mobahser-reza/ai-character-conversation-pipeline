@@ -14,10 +14,9 @@ _POLL_TIMEOUT_SECONDS = 600
 
 
 class HeyGenAvatarProvider(AvatarProvider):
-    """Real HeyGen adapter: submits a photo-avatar talking video job (reference image +
-    pre-rendered audio track), then polls until HeyGen finishes lip-sync rendering.
-    Note: HeyGen's API surface changes over time — verify endpoint paths against
-    current HeyGen API docs before relying on this in production."""
+    """Real HeyGen adapter (v3 Videos API): uploads the reference image as a talking
+    photo to get an avatar_id, submits a video job with a pre-rendered audio track,
+    then polls until HeyGen finishes lip-sync rendering."""
 
     name = "heygen"
 
@@ -36,22 +35,16 @@ class HeyGenAvatarProvider(AvatarProvider):
                 content=image_bytes,
             )
             upload_response.raise_for_status()
-            talking_photo_id = upload_response.json()["data"]["talking_photo_id"]
+            avatar_id = upload_response.json()["data"]["talking_photo_id"]
 
             submit_response = await client.post(
-                f"{_BASE_URL}/v2/video/generate",
+                f"{_BASE_URL}/v3/videos",
                 headers={**headers, "Content-Type": "application/json"},
                 json={
-                    "video_inputs": [
-                        {
-                            "character": {
-                                "type": "talking_photo",
-                                "talking_photo_id": talking_photo_id,
-                            },
-                            "voice": {"type": "audio", "audio_url": audio_url},
-                        }
-                    ],
-                    "dimension": {"width": 720, "height": 1280},
+                    "type": "avatar",
+                    "avatar_id": avatar_id,
+                    "audio_url": audio_url,
+                    "aspect_ratio": "9:16",
                 },
             )
             submit_response.raise_for_status()
@@ -61,9 +54,8 @@ class HeyGenAvatarProvider(AvatarProvider):
             video_url = None
             while elapsed < _POLL_TIMEOUT_SECONDS:
                 status_response = await client.get(
-                    f"{_BASE_URL}/v1/video_status.get",
+                    f"{_BASE_URL}/v3/videos/{video_id}",
                     headers=headers,
-                    params={"video_id": video_id},
                 )
                 status_response.raise_for_status()
                 data = status_response.json()["data"]
