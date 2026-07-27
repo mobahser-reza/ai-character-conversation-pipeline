@@ -25,18 +25,28 @@ class HeyGenAvatarProvider(AvatarProvider):
         self, reference_image_url: str, audio_url: str, expression_tag: str | None
     ) -> AvatarResult:
         api_key = await get_decrypted_key("heygen")
-        headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+        headers = {"X-Api-Key": api_key}
+        content_type = "image/png" if reference_image_url.lower().endswith(".png") else "image/jpeg"
 
         async with httpx.AsyncClient(timeout=60) as client:
+            image_bytes = (await client.get(reference_image_url)).content
+            upload_response = await client.post(
+                "https://upload.heygen.com/v1/talking_photo",
+                headers={**headers, "Content-Type": content_type},
+                content=image_bytes,
+            )
+            upload_response.raise_for_status()
+            talking_photo_id = upload_response.json()["data"]["talking_photo_id"]
+
             submit_response = await client.post(
                 f"{_BASE_URL}/v2/video/generate",
-                headers=headers,
+                headers={**headers, "Content-Type": "application/json"},
                 json={
                     "video_inputs": [
                         {
                             "character": {
                                 "type": "talking_photo",
-                                "talking_photo_url": reference_image_url,
+                                "talking_photo_id": talking_photo_id,
                             },
                             "voice": {"type": "audio", "audio_url": audio_url},
                         }
