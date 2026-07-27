@@ -17,6 +17,7 @@ from app.infrastructure.db.models import (
     StageStatus,
     VideoJob,
     VideoJobStageLog,
+    VoiceProfile,
 )
 from app.infrastructure.providers.factory import ProviderFactory
 from app.infrastructure.providers.storage.factory import get_storage_provider
@@ -69,6 +70,20 @@ async def run_pipeline(db: AsyncSession, job_id: uuid.UUID) -> None:
     characters_by_id = {
         c.id: c for c in (await db.execute(select(Character))).scalars().all()
     }
+    voices_by_character: dict[uuid.UUID, list[VoiceProfile]] = {}
+    for voice in (await db.execute(select(VoiceProfile))).scalars().all():
+        voices_by_character.setdefault(voice.character_id, []).append(voice)
+
+    def resolve_voice_id(character: Character | None, language: str) -> str:
+        if character is None:
+            return "default"
+        candidates = voices_by_character.get(character.id, [])
+        if not candidates:
+            return "default"
+        for voice in candidates:
+            if voice.language == language:
+                return voice.provider_voice_id
+        return candidates[0].provider_voice_id
 
     job.status = JobStatus.running
     await db.commit()
@@ -86,10 +101,9 @@ async def run_pipeline(db: AsyncSession, job_id: uuid.UUID) -> None:
         line_audio: dict[uuid.UUID, dict] = {}
         for line in lines:
             character = characters_by_id.get(line.speaker_character_id) if line.speaker_character_id else None
-            voice_id = character.default_voice_id if character else None
-            result = await tts_provider.synthesize(
-                line.text, str(voice_id) if voice_id else "default", line.detected_language or "en"
-            )
+            language = line.detected_language or "en"
+            voice_id = resolve_voice_id(character, language)
+            result = await tts_provider.synthesize(line.text, voice_id, language)
             db.add(MediaAsset(video_job_id=job.id, type=AssetType.audio, url=result.audio_url, stage_ref="tts"))
             line_audio[line.id] = {"url": result.audio_url, "duration": result.duration_seconds}
         await db.commit()
