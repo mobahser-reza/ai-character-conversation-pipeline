@@ -1,6 +1,8 @@
+import base64
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +17,8 @@ from app.api.schemas.character import (
 )
 from app.infrastructure.db.models import Character, VoiceProfile
 from app.infrastructure.db.session import get_db
+from app.infrastructure.providers.storage.factory import get_storage_provider
+from app.infrastructure.providers.storage.paths import new_tmp_path
 
 router = APIRouter(
     prefix="/api/characters", tags=["characters"], dependencies=[Depends(get_current_user)]
@@ -65,6 +69,32 @@ async def delete_character(character_id: uuid.UUID, db: AsyncSession = Depends(g
         raise HTTPException(status_code=404, detail="Character not found")
     await db.delete(character)
     await db.commit()
+
+
+class AppearanceImageUpload(BaseModel):
+    image_base64: str
+    content_type: str = "image/png"
+
+
+@router.post("/{character_id}/appearance-image", response_model=CharacterOut)
+async def upload_appearance_image(
+    character_id: uuid.UUID, payload: AppearanceImageUpload, db: AsyncSession = Depends(get_db)
+):
+    character = await db.get(Character, character_id, options=[selectinload(Character.voices)])
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    extension = ".png" if "png" in payload.content_type else ".jpg"
+    tmp_path = new_tmp_path(extension)
+    with open(tmp_path, "wb") as f:
+        f.write(base64.b64decode(payload.image_base64))
+
+    storage = get_storage_provider()
+    url = await storage.save(tmp_path, f"characters/{character_id}{extension}")
+    character.appearance_ref_image_url = url
+    await db.commit()
+    await db.refresh(character, attribute_names=["voices"])
+    return character
 
 
 @router.post("/{character_id}/voices", response_model=VoiceProfileOut, status_code=201)
