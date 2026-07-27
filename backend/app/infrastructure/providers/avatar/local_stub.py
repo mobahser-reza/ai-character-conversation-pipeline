@@ -1,6 +1,8 @@
 import subprocess
 import uuid
 
+import httpx
+
 from app.domain.interfaces.providers import AvatarProvider, AvatarResult
 from app.infrastructure.providers.storage.factory import get_storage_provider
 
@@ -11,8 +13,15 @@ class LocalStubAvatarProvider(AvatarProvider):
     async def generate_clip(
         self, reference_image_url: str, audio_url: str, expression_tag: str | None
     ) -> AvatarResult:
-        """Renders a placeholder color-card clip standing in for a real lip-synced avatar clip."""
-        duration = 3.0
+        """Renders a placeholder color-card clip with the real TTS audio muxed in, standing in
+        for a real lip-synced avatar clip (which would bake the same audio into its output)."""
+        audio_path = f"/tmp/{uuid.uuid4()}.mp3"
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.get(audio_url)
+            response.raise_for_status()
+        with open(audio_path, "wb") as f:
+            f.write(response.content)
+
         tmp_path = f"/tmp/{uuid.uuid4()}.mp4"
         subprocess.run(
             [
@@ -21,14 +30,21 @@ class LocalStubAvatarProvider(AvatarProvider):
                 "-f",
                 "lavfi",
                 "-i",
-                f"color=c=indigo:s=720x1280:d={duration}",
+                "color=c=indigo:s=720x1280",
+                "-i",
+                audio_path,
                 "-vf",
                 f"drawtext=text='{(expression_tag or 'avatar')[:40]}':fontcolor=white:fontsize=36:x=(w-text_w)/2:y=(h-text_h)/2",
+                "-map", "0:v", "-map", "1:a",
+                "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1",
+                "-c:a", "aac",
+                "-shortest",
                 tmp_path,
             ],
             check=True,
-            capture_output=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
         storage = get_storage_provider()
         url = await storage.save(tmp_path, f"avatar/{uuid.uuid4()}.mp4")
-        return AvatarResult(video_url=url, duration_seconds=duration)
+        return AvatarResult(video_url=url, duration_seconds=0.0)
