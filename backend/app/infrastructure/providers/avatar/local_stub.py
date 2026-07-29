@@ -6,12 +6,14 @@ import httpx
 from app.domain.interfaces.providers import AvatarProvider, AvatarResult
 from app.infrastructure.providers.storage.factory import get_storage_provider
 
+_ASPECT_TO_SIZE = {"9:16": "720x1280", "1:1": "1080x1080", "16:9": "1280x720"}
+
 
 class LocalStubAvatarProvider(AvatarProvider):
     name = "local_stub"
 
     async def generate_clip(
-        self, reference_image_url: str, audio_url: str, expression_tag: str | None
+        self, reference_image_url: str, audio_url: str, expression_tag: str | None, aspect_ratio: str
     ) -> AvatarResult:
         """Renders a placeholder color-card clip with the real TTS audio muxed in, standing in
         for a real lip-synced avatar clip (which would bake the same audio into its output)."""
@@ -30,7 +32,7 @@ class LocalStubAvatarProvider(AvatarProvider):
                 "-f",
                 "lavfi",
                 "-i",
-                "color=c=indigo:s=720x1280",
+                f"color=c=indigo:s={_ASPECT_TO_SIZE.get(aspect_ratio, '720x1280')}",
                 "-i",
                 audio_path,
                 "-vf",

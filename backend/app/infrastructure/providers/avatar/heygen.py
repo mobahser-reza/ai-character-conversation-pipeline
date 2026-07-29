@@ -21,7 +21,7 @@ class HeyGenAvatarProvider(AvatarProvider):
     name = "heygen"
 
     async def generate_clip(
-        self, reference_image_url: str, audio_url: str, expression_tag: str | None
+        self, reference_image_url: str, audio_url: str, expression_tag: str | None, aspect_ratio: str
     ) -> AvatarResult:
         api_key = await get_decrypted_key("heygen")
         headers = {"X-Api-Key": api_key}
@@ -44,7 +44,7 @@ class HeyGenAvatarProvider(AvatarProvider):
                     "type": "avatar",
                     "avatar_id": avatar_id,
                     "audio_url": audio_url,
-                    "aspect_ratio": "9:16",
+                    "aspect_ratio": aspect_ratio,
                 },
             )
             submit_response.raise_for_status()

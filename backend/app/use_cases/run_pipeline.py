@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -117,7 +118,9 @@ async def run_pipeline(db: AsyncSession, job_id: uuid.UUID) -> None:
             character = characters_by_id.get(line.speaker_character_id) if line.speaker_character_id else None
             ref_image = character.appearance_ref_image_url if character else ""
             audio = line_audio[line.id]
-            result = await avatar_provider.generate_clip(ref_image or "", audio["url"], line.expression_tag)
+            result = await avatar_provider.generate_clip(
+                ref_image or "", audio["url"], line.expression_tag, job.target_aspect_ratio
+            )
             db.add(MediaAsset(video_job_id=job.id, type=AssetType.avatar_clip, url=result.video_url, stage_ref="avatar"))
             line_avatar[line.id] = result.video_url
         await db.commit()
@@ -138,15 +141,56 @@ async def run_pipeline(db: AsyncSession, job_id: uuid.UUID) -> None:
         await db.commit()
         await _finish_stage(db, log, video_gen_provider.name)
 
-        # Stage 4: Composite (overlay avatar on background per line, concat in script order)
+        # Stage 4: Composite - both characters share the same frame per scene (left/right),
+        # whoever's speaking is lip-synced, the other shown as a still, concat in script order
         log = await _start_stage(db, job, "composite")
+        canvas_width, canvas_height = compositor.canvas_size(job.target_aspect_ratio)
+
+        scene_character_side: dict[uuid.UUID, dict[uuid.UUID, str]] = {}
+        for scene in scenes.values():
+            scene_lines = [l for l in lines if l.scene_id == scene.id]
+            ordered_characters: list[uuid.UUID] = []
+            for l in scene_lines:
+                if l.speaker_character_id and l.speaker_character_id not in ordered_characters:
+                    ordered_characters.append(l.speaker_character_id)
+            scene_character_side[scene.id] = {
+                cid: ("left" if i == 0 else "right") for i, cid in enumerate(ordered_characters[:2])
+            }
+
+        other_character_image_paths: dict[uuid.UUID, str] = {}
+
+        async def local_image_path(character: Character) -> str:
+            if character.id in other_character_image_paths:
+                return other_character_image_paths[character.id]
+            tmp_path = new_tmp_path(".jpg")
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.get(character.appearance_ref_image_url)
+                response.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                f.write(response.content)
+            other_character_image_paths[character.id] = tmp_path
+            return tmp_path
+
         composited_clips = []
         for line in lines:
             background_url = scene_background[line.scene_id]
             background_path = media_url_to_local_path(background_url)
             avatar_path = media_url_to_local_path(line_avatar[line.id])
             out_path = new_tmp_path(".mp4")
-            compositor.overlay_avatar_on_background(background_path, avatar_path, out_path)
+
+            sides = scene_character_side[line.scene_id]
+            speaker_side = sides.get(line.speaker_character_id) if line.speaker_character_id else None
+            other_cid = next((cid for cid in sides if cid != line.speaker_character_id), None)
+            other_character = characters_by_id.get(other_cid) if other_cid else None
+
+            if speaker_side and other_character and other_character.appearance_ref_image_url:
+                other_image_path = await local_image_path(other_character)
+                compositor.overlay_two_avatars_on_background(
+                    background_path, canvas_width, canvas_height,
+                    avatar_path, other_image_path, speaker_side, out_path,
+                )
+            else:
+                compositor.overlay_avatar_on_background(background_path, avatar_path, out_path)
             composited_clips.append(out_path)
 
         concat_path = new_tmp_path(".mp4")

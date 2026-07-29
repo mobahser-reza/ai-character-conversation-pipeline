@@ -31,6 +31,52 @@ def overlay_avatar_on_background(background_path: str, avatar_path: str, output_
     )
 
 
+def canvas_size(aspect_ratio: str) -> tuple[int, int]:
+    width, height = _ASPECT_TO_SIZE.get(aspect_ratio, "720x1280").split("x")
+    return int(width), int(height)
+
+
+def overlay_two_avatars_on_background(
+    background_path: str,
+    canvas_width: int,
+    canvas_height: int,
+    speaker_avatar_path: str,
+    other_character_image_path: str,
+    speaker_side: str,
+    output_path: str,
+) -> None:
+    """Places the speaking character's lip-synced clip and the other character's still
+    reference photo side by side over the same background, so both appear in one frame
+    together (like sitting across from each other) instead of one full-frame speaker at a time."""
+    avatar_width = int(canvas_width * 0.38)
+    margin = int(canvas_width * 0.04)
+    bottom_margin = int(canvas_height * 0.03)
+    left_x = margin
+    right_x = canvas_width - avatar_width - margin
+    speaker_x = left_x if speaker_side == "left" else right_x
+    other_x = right_x if speaker_side == "left" else left_x
+    y_expr = f"H-h-{bottom_margin}"
+
+    filter_complex = (
+        f"[1:v]scale={avatar_width}:-1[spk];"
+        f"[2:v]scale={avatar_width}:-1[oth];"
+        f"[0:v][spk]overlay={speaker_x}:{y_expr}:shortest=1[bg1];"
+        f"[bg1][oth]overlay={other_x}:{y_expr}[v]"
+    )
+    _run_ffmpeg(
+        [
+            "ffmpeg", "-y",
+            "-i", background_path,
+            "-i", speaker_avatar_path,
+            "-loop", "1", "-i", other_character_image_path,
+            "-filter_complex", filter_complex,
+            "-map", "[v]", "-map", "1:a?",
+            "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac",
+            output_path,
+        ]
+    )
+
+
 def concat_clips(clip_paths: list[str], output_path: str) -> None:
     if len(clip_paths) == 1:
         _run_ffmpeg(["ffmpeg", "-y", "-i", clip_paths[0], "-c", "copy", output_path])

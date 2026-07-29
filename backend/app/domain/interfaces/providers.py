@@ -34,6 +34,7 @@ class AvatarProvider(ABC):
         reference_image_url: str,
         audio_url: str,
         expression_tag: str | None,
+        aspect_ratio: str,
     ) -> AvatarResult:
         ...
 
