@@ -91,7 +91,11 @@ def concat_clips(clip_paths: list[str], output_path: str) -> None:
         for path in clip_paths:
             f.write(f"file '{path}'\n")
     _run_ffmpeg(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", output_path]
+        [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file,
+            "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac",
+            output_path,
+        ]
     )
 
 
