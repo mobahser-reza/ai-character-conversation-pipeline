@@ -5,7 +5,10 @@ _ENCODE_ARGS = ["-preset", "ultrafast", "-threads", "1"]
 
 
 def _run_ffmpeg(args: list[str]) -> None:
-    result = subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        result = subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"ffmpeg timed out after 300s: {' '.join(args)}")
     if result.returncode != 0:
         raise RuntimeError(
             f"ffmpeg failed (exit {result.returncode}): {result.stderr.decode(errors='replace')[-2000:]}"
@@ -61,7 +64,7 @@ def overlay_two_avatars_on_background(
         f"[1:v]scale={avatar_width}:-1[spk];"
         f"[2:v]scale={avatar_width}:-1[oth];"
         f"[0:v][spk]overlay={speaker_x}:{y_expr}:shortest=1[bg1];"
-        f"[bg1][oth]overlay={other_x}:{y_expr}[v]"
+        f"[bg1][oth]overlay={other_x}:{y_expr}:shortest=1[v]"
     )
     _run_ffmpeg(
         [
@@ -72,6 +75,7 @@ def overlay_two_avatars_on_background(
             "-filter_complex", filter_complex,
             "-map", "[v]", "-map", "1:a?",
             "-c:v", "libx264", *_ENCODE_ARGS, "-c:a", "aac",
+            "-shortest",
             output_path,
         ]
     )
