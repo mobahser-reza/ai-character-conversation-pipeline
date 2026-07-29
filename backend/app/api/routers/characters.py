@@ -15,7 +15,7 @@ from app.api.schemas.character import (
     VoiceProfileCreate,
     VoiceProfileOut,
 )
-from app.infrastructure.db.models import Character, VoiceProfile
+from app.infrastructure.db.models import Character, ScriptLine, VoiceProfile
 from app.infrastructure.db.session import get_db
 from app.infrastructure.providers.storage.factory import get_storage_provider
 from app.infrastructure.providers.storage.paths import new_tmp_path
@@ -67,6 +67,18 @@ async def delete_character(character_id: uuid.UUID, db: AsyncSession = Depends(g
     character = await db.get(Character, character_id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+
+    voice_result = await db.execute(select(VoiceProfile).where(VoiceProfile.character_id == character_id))
+    for voice in voice_result.scalars().all():
+        await db.delete(voice)
+
+    line_result = await db.execute(
+        select(ScriptLine).where(ScriptLine.speaker_character_id == character_id)
+    )
+    for line in line_result.scalars().all():
+        line.speaker_character_id = None
+
+    await db.flush()
     await db.delete(character)
     await db.commit()
 
