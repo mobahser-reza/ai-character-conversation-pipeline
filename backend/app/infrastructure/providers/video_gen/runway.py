@@ -42,7 +42,7 @@ class RunwayVideoGenProvider(VideoGenProvider):
                     "promptText": full_prompt,
                     "ratio": _ASPECT_TO_RATIO.get(aspect_ratio, "720:1280"),
                     "duration": 8,
-                    "model": "veo3",
+                    "model": "veo3.1",
                 },
             )
             if submit_response.status_code >= 400:
